@@ -2,9 +2,9 @@ import os
 import datetime
 import json
 from openpyxl import Workbook
-from openpyxl.utils import get_column_letter
 
 os.system("clear")
+
 def record_transaction(amount, description, transaction_type, transaction_sheet):
     date = datetime.datetime.now().strftime("%Y-%m-%d")
     time = datetime.datetime.now().strftime("%H:%M:%S")
@@ -80,15 +80,15 @@ def main():
             print("Invalid input! Please enter a valid number")
             continue
 
-        if transaction_type.upper() == "E" or transaction_type.lower() == "expense":
+        if transaction_type.upper() in ["E", "EXPENSE"]:
             for account in bank_accounts:
                 bank_accounts[account] -= amount
-            record_transaction(amount, desc, "Expense", ws, total_expenses)
+            record_transaction(amount, desc, "Expense", ws)
             total_expenses += amount
             print("Expense successfully recorded!")
             if total_expenses > 150:
                 print("You have spent more than 150! Save your money!")
-        elif transaction_type.upper() == "I" or transaction_type.lower() == "income":
+        elif transaction_type.upper() in ["I", "INCOME"]:
             print("Select the bank to deposit the income:")
             for i, option in enumerate(bank_options, 1):
                 print(f"{i}. {option}")
@@ -114,7 +114,7 @@ def main():
             
             if bank_name in bank_accounts:
                 bank_accounts[bank_name] += amount
-                record_transaction(amount, desc, "Income", ws, total_income)
+                record_transaction(amount, desc, "Income", ws)
                 total_income += amount
                 print("Income successfully recorded!")
             else:
