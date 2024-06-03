@@ -3,11 +3,8 @@ from openpyxl import Workbook, load_workbook
 import json
 import os
 
-def clear_screen():
-    if os.name == 'posix':
-        os.system("clear")
-    else:
-        os.system("cls")
+def screen():
+    os.system("clear")
 
 def record_transaction(amount, description, transaction_type, bank, transactions_sheet):
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -32,7 +29,7 @@ def load_bank():
         return None
 
 def main():
-    clear_screen()
+    screen()
     print("Welcome to Finance Management\n")
     
     # Load bank account from latest file
@@ -62,13 +59,14 @@ def main():
 
     try:
         while True:
-            new = datetime.datetime.now().strftime("%Y-%m-%d")
-            transaction_type = input("\nIncome [I] or Expense [E] and 'save' to save file: ").upper()
-            if transaction_type == 'SAVE':
+            current_date = datetime.datetime.now().strftime("%Y-%m-%d")
+            transaction_type = input("\nIncome [I] or Expense [E] and SAVE [S] to save file: ").upper()
+            if transaction_type in ["S", "SAVE"]:
                 last_row = ws.max_row
                 ws[f"C{last_row + 1}"] = f"=SUM(C2:C{last_row})"
-                wb.save(f"{new}.xlsx")  # name of transaction file when saving
-                print(f"File saved as {new}.xlsx")
+                filename = f"{current_date}finance_recorded.xlsx"
+                wb.save(filename)  # name of transaction file when saving
+                print(f"File saved as {filename}")
                 late_bank(bank_accounts)
                 break
             description = input("Enter the transaction activities: ")
@@ -80,12 +78,12 @@ def main():
                 print("Invalid input. Please enter a valid number.")
                 continue
 
-            if transaction_type == "E":
+            if transaction_type in ["E", "EXPENSE"]:
                 print("[1] RHB Bank")
                 print("[2] Bank Islam")
                 print("[3] CIMB Bank")
                 print("[4] OTHERS")
-                loc_bank = input("Which bank did you use? (Enter the bank name or number): ")
+                loc_bank = input("\nWhich bank did you use? (Enter the bank name or number): ")
                 if loc_bank.isdigit():
                     loc_bank = int(loc_bank)
                     if loc_bank == 1:
@@ -117,8 +115,34 @@ def main():
                 
                 if total_expenses > 200:
                     print("You have spent more than RM 200. Consider saving money.")
-            elif transaction_type == "I":
-                record_transaction(amount, description, "Income", "N/A", ws)
+            elif transaction_type in ["I", "INCOME"]:
+                print("[1] RHB Bank")
+                print("[2] Bank Islam")
+                print("[3] CIMB Bank")
+                print("[4] OTHERS")
+                loc_bank = input("\nWhich bank did you receive the income in? (Enter the bank name or number): ")
+                if loc_bank.isdigit():
+                    loc_bank = int(loc_bank)
+                    if loc_bank == 1:
+                        selected_bank = "RHB"
+                    elif loc_bank == 2:
+                        selected_bank = "Bank Islam"
+                    elif loc_bank == 3:
+                        selected_bank = "Cimb Bank"
+                    elif loc_bank == 4:
+                        selected_bank = input("Enter the bank name: ")
+                    else:
+                        print("Invalid selection. Please try again.")
+                        continue
+                else:
+                    selected_bank = loc_bank
+                
+                if selected_bank not in bank_accounts:
+                    print("Bank not found. Please try again.")
+                    continue
+
+                bank_accounts[selected_bank] += amount
+                record_transaction(amount, description, "Income", selected_bank, ws)
                 total_income += amount
                 print("Income recorded.")
             else:
@@ -132,9 +156,11 @@ def main():
             print(f"Total Amount: {total_amount}")
 
     except KeyboardInterrupt:
+        current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         print("\n\nTransaction recording interrupted. Saving data to file...")
-        wb.save("transactions.xlsx")
-        print("Data saved successfully.")
+        filename = f"finance_{current_time}_recorded.xlsx"
+        wb.save(filename)
+        print(f"Data saved successfully as {filename}")
 
     # Display total income and total expenses
     print("\nTotal Income:", total_income)
