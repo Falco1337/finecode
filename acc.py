@@ -55,8 +55,10 @@ def load_bank_accounts():
         return {}
 
 def main():
+    timestamp2 = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     clear_screen()
     print("Welcome to Finance Management\n")
+    print(f"{timestamp2}\n")
     
     # Load bank accounts
     bank_accounts = load_bank_accounts()
