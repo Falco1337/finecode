@@ -2,6 +2,10 @@ import datetime
 from openpyxl import Workbook, load_workbook
 import json
 import os
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def clear_screen():
     os.system("clear")
@@ -28,7 +32,7 @@ def generate_financial_statements(workbook, transactions_sheet):
     current_date = datetime.datetime.now().strftime("%Y-%m-%d")
     net_income = total_income - total_expenses
     ws_statements.append([current_date, total_income, total_expenses, net_income])
-    print(f"\nFinancial statements added to the workbook.")
+    logging.info("Financial statements added to the workbook.")
 
 def generate_daily_expenses_sheet(workbook, transactions_sheet):
     ws_daily_expenses = workbook.create_sheet(title="Daily Expenses")
@@ -41,7 +45,7 @@ def generate_daily_expenses_sheet(workbook, transactions_sheet):
             if row[1] == "Expense":
                 ws_daily_expenses.append([row[0], row[3], row[2], row[4]])
     
-    print("Daily expenses sheet added to the workbook.")
+    logging.info("Daily expenses sheet added to the workbook.")
 
 def save_bank_accounts(bank_accounts):
     with open("bank_accounts.json", "w") as file:
@@ -54,27 +58,93 @@ def load_bank_accounts():
     else:
         return {}
 
+def initialize_bank_accounts():
+    bank_accounts = {
+        "RHB": float(input("Enter your latest amount in RHB: ")),
+        "Bank Islam": float(input("Enter your latest amount in Bank Islam: ")),
+        "Cimb Bank": float(input("Enter your latest amount in Cimb Bank: "))
+    }
+    
+    if input("Do you have any other bank? [y/n]: ").lower() == "y":
+        bank_name = input("What is your bank? : ")
+        bank_accounts[bank_name] = float(input(f"Enter your latest amount in {bank_name}: "))
+    
+    return bank_accounts
+
+def get_transaction_type():
+    while True:
+        transaction_type = input("\nIncome [I] or Expense [E] and SAVE [S] to save file: ").upper()
+        if transaction_type in ["I", "E", "S", "SAVE"]:
+            return transaction_type
+        else:
+            print("Invalid transaction type. Please enter I, E, or S.")
+
+def get_bank_selection(bank_accounts):
+    while True:
+        print("\n[1] RHB Bank")
+        print("[2] Bank Islam")
+        print("[3] CIMB Bank")
+        print("[4] OTHERS\n")
+        loc_bank = input("Which bank did you use? [Enter number]: ")
+        if loc_bank.isdigit():
+            loc_bank = int(loc_bank)
+            if loc_bank == 1:
+                return "RHB"
+            elif loc_bank == 2:
+                return "Bank Islam"
+            elif loc_bank == 3:
+                return "Cimb Bank"
+            elif loc_bank == 4:
+                return input("Enter the bank name: ")
+            else:
+                print("Invalid selection. Please try again.")
+        else:
+            if loc_bank in bank_accounts:
+                return loc_bank
+            else:
+                print("Bank not found. Please try again.")
+
+def handle_transaction(bank_accounts, ws, transaction_type):
+    description = input("Enter the transaction description: ")
+    amount_input = input("Enter the transaction amount: ")
+
+    try:
+        amount = float(amount_input)
+    except ValueError:
+        print("Invalid input. Please enter a valid number.")
+        return
+
+    selected_bank = get_bank_selection(bank_accounts)
+    
+    if transaction_type in ["E", "EXPENSE"]:
+        if bank_accounts[selected_bank] < amount:
+            print("Insufficient funds in the selected bank account. Please try again.")
+            return
+
+        bank_accounts[selected_bank] -= amount
+        record_transaction(amount, description, "Expense", selected_bank, ws)
+        print("Expense recorded.")
+        
+    elif transaction_type in ["I", "INCOME"]:
+        bank_accounts[selected_bank] += amount
+        record_transaction(amount, description, "Income", selected_bank, ws)
+        print("Income recorded.")
+
+    print("\nUpdated Account Balances:")
+    for bank, amount in bank_accounts.items():
+        print(f"{bank}: {amount}")
+
+    print(f"Total Amount: {total_bank(bank_accounts)}")
+
 def main():
     timestamp2 = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     clear_screen()
     print("Welcome to Finance Management\n")
     print(f"{timestamp2}\n")
     
-    # Load bank accounts
     bank_accounts = load_bank_accounts()
     if not bank_accounts:
-        bank_accounts = {
-            "RHB": float(input("Enter your latest amount in RHB: ")),
-            "Bank Islam": float(input("Enter your latest amount in Bank Islam: ")),
-            "Cimb Bank": float(input("Enter your latest amount in Cimb Bank: "))
-        }
-        
-        if input("Do you have any other bank? [y/n]: ").lower() == "y":
-            bank_name = input("What is your bank? : ")
-            bank_accounts[bank_name] = float(input(f"Enter your latest amount in {bank_name}: "))
-
-    total_income = 0.0
-    total_expenses = 0.0
+        bank_accounts = initialize_bank_accounts()
 
     print("\nTotal Amount: ", total_bank(bank_accounts))
     for bank, amount in bank_accounts.items():
@@ -94,73 +164,14 @@ def main():
 
     try:
         while True:
-            transaction_type = input("\nIncome [I] or Expense [E] and SAVE [S] to save file: ").upper()
+            transaction_type = get_transaction_type()
             if transaction_type in ["S", "SAVE"]:
                 wb.save(filename)
                 print(f"File saved as {filename}")
                 save_bank_accounts(bank_accounts)
                 break
 
-            description = input("Enter the transaction description: ")
-            amount_input = input("Enter the transaction amount: ")
-            
-            try:
-                amount = float(amount_input)
-            except ValueError:
-                print("Invalid input. Please enter a valid number.")
-                continue
-
-            print("\n[1] RHB Bank")
-            print("[2] Bank Islam")
-            print("[3] CIMB Bank")
-            print("[4] OTHERS\n")
-            loc_bank = input("Which bank did you use? [Enter number]: ")
-            if loc_bank.isdigit():
-                loc_bank = int(loc_bank)
-                if loc_bank == 1:
-                    selected_bank = "RHB"
-                elif loc_bank == 2:
-                    selected_bank = "Bank Islam"
-                elif loc_bank == 3:
-                    selected_bank = "Cimb Bank"
-                elif loc_bank == 4:
-                    selected_bank = input("Enter the bank name: ")
-                else:
-                    print("Invalid selection. Please try again.")
-                    continue
-            else:
-                selected_bank = loc_bank
-            
-            if selected_bank not in bank_accounts:
-                print("Bank not found. Please try again.")
-                continue
-
-            if transaction_type in ["E", "EXPENSE"]:
-                if bank_accounts[selected_bank] < amount:
-                    print("Insufficient funds in the selected bank account. Please try again.")
-                    continue
-
-                bank_accounts[selected_bank] -= amount
-                total_expenses += amount
-                record_transaction(amount, description, "Expense", selected_bank, ws)
-                print("Expense recorded.")
-                
-                if total_expenses > 200:
-                    print("You have spent more than RM 200. Consider saving money.")
-            elif transaction_type in ["I", "INCOME"]:
-                bank_accounts[selected_bank] += amount
-                total_income += amount
-                record_transaction(amount, description, "Income", selected_bank, ws)
-                print("Income recorded.")
-            else:
-                print("Invalid transaction type.")
-            
-            print("\nUpdated Account Balances:")
-            for bank, amount in bank_accounts.items():
-                print(f"{bank}: {amount}")
-
-            total_amount = total_bank(bank_accounts)
-            print(f"Total Amount: {total_amount}")
+            handle_transaction(bank_accounts, ws, transaction_type)
 
     except KeyboardInterrupt:
         current_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
