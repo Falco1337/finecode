@@ -104,7 +104,7 @@ def get_bank_selection(bank_accounts):
             else:
                 print("Bank not found. Please try again.")
 
-def handle_transaction(bank_accounts, ws, transaction_type):
+def handle_transaction(bank_accounts, ws, transaction_type, total_income, total_expenses):
     description = input("Enter the transaction description: ")
     amount_input = input("Enter the transaction amount: ")
 
@@ -112,21 +112,23 @@ def handle_transaction(bank_accounts, ws, transaction_type):
         amount = float(amount_input)
     except ValueError:
         print("Invalid input. Please enter a valid number.")
-        return
+        return total_income, total_expenses
 
     selected_bank = get_bank_selection(bank_accounts)
     
     if transaction_type in ["E", "EXPENSE"]:
         if bank_accounts[selected_bank] < amount:
             print("Insufficient funds in the selected bank account. Please try again.")
-            return
+            return total_income, total_expenses
 
         bank_accounts[selected_bank] -= amount
+        total_expenses += amount
         record_transaction(amount, description, "Expense", selected_bank, ws)
         print("Expense recorded.")
         
     elif transaction_type in ["I", "INCOME"]:
         bank_accounts[selected_bank] += amount
+        total_income += amount
         record_transaction(amount, description, "Income", selected_bank, ws)
         print("Income recorded.")
 
@@ -135,6 +137,7 @@ def handle_transaction(bank_accounts, ws, transaction_type):
         print(f"{bank}: {amount}")
 
     print(f"Total Amount: {total_bank(bank_accounts)}")
+    return total_income, total_expenses
 
 def main():
     timestamp2 = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -162,6 +165,9 @@ def main():
         ws.title = "Transactions"
         ws.append(["Date", "Transaction Type", "Amount", "Description", "Bank"])
 
+    total_income = 0.0
+    total_expenses = 0.0
+
     try:
         while True:
             transaction_type = get_transaction_type()
@@ -171,7 +177,7 @@ def main():
                 save_bank_accounts(bank_accounts)
                 break
 
-            handle_transaction(bank_accounts, ws, transaction_type)
+            total_income, total_expenses = handle_transaction(bank_accounts, ws, transaction_type, total_income, total_expenses)
 
     except KeyboardInterrupt:
         current_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
