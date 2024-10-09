@@ -144,7 +144,7 @@ def handle_transaction(bank_accounts, transactions_sheet, transaction_type, tota
 def main():
     """Main entry point for the Finance Management system."""
     clear_screen()
-    logging.info("Welcome to Finance Management")
+    logging.info("/nWelcome to Finance Management")
     
     bank_accounts = load_bank_accounts() or initialize_bank_accounts()
     
