@@ -38,10 +38,9 @@ def load_bank_accounts():
     return {}
 
 def save_bank_accounts(bank_accounts):
-    current_date = datetime.datetime.now().strftime("%Y-%m-%d")
-    with open(f"bank_accounts_{current_date}.json", "w") as file:
+    with open("bank_accounts.json", "w") as file:
         json.dump(bank_accounts, file)
-    logging.info(f"Bank accounts saved to bank_accounts_{current_date}.json.")
+    logging.info("Bank accounts saved to bank_accounts.json.")
 
 def record_transaction(transactions_sheet, amount, description, transaction_type, bank):
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -135,32 +134,31 @@ def save_data(workbook, bank_accounts, descriptions):
         console.print(f"[bold green]Data saved successfully in {filename}[/bold green]")
 
 def initialize_bank_accounts():
-    bank_accounts = {}
-    try:
-        while True:
-            bank_name = input("Enter the bank name: ")
-            if bank_name.lower() == 'q':
-                break
-            latest_amount = Prompt.ask(f"What is the current balance in {bank_name}?")
-            amount = validate_amount(latest_amount)
-            if amount is None:
-                continue
-            bank_accounts[bank_name] = amount
-            if not Confirm.ask("Would you like to add another bank ?"):
-                break
-    except KeyboardInterrupt:
-        console.print("\n[bold yellow]Exiting bank account entry...[/bold yellow]")
+    bank_accounts = load_bank_accounts()
+    if bank_accounts:
+        console.print("[bold green]Loaded bank account data from previous session.[/bold green]\n")
+    else:
+        console.print("[bold yellow]No previous bank account data found. Please enter initial bank account details.[/bold yellow]\n")
+        try:
+            while True:
+                bank_name = input("Enter the bank name: ")
+                if bank_name.lower() == 'q':
+                    break
+                latest_amount = Prompt.ask(f"What is the current balance in {bank_name}?")
+                amount = validate_amount(latest_amount)
+                if amount is None:
+                    continue
+                bank_accounts[bank_name] = amount
+                if not Confirm.ask("Would you like to add another bank ?"):
+                    break
+        except KeyboardInterrupt:
+            console.print("\n[bold yellow]Exiting bank account entry...[/bold yellow]")
     
     return bank_accounts
 
 def show_help():
     console.print("[bold blue]Available Commands:[/bold blue]")
-    console.print("[bold green]I:[/bold green] Income transaction")
-    console.print("[bold green]E:[/bold green] Expense transaction")
-    console.print("[bold green]S:[/bold green] Save data")
-    console.print("[bold green]T:[/bold green] Show transaction history")
-    console.print("[bold green]H:[/bold green] Show help")
-    console.print("[bold green]Q:[/bold green] Quit the application")
+    console.print("[bold green]I:[/bold green] Income transaction\n[bold green]E:[/bold green] Expense transaction\n[bold green]E:[/bold green] Expense transaction\n[bold green]S:[/bold green] Save data\n[bold green]T:[/bold green] Show transaction history\n[bold green]H:[/bold green] Show help\n[bold green]Q:[/bold green] Quit the application")
 
 def main():
     clear_screen()    
