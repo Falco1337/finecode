@@ -188,6 +188,7 @@ def main():
             else:
                 console.print("[bold red]Invalid command. Please try again.[/bold red]")
     except KeyboardInterrupt:
+        clear_screen()
         console.print("[bold yellow]👋 Exiting.... Goodbye ![/bold yellow]")
 
 if __name__ == "__main__":
