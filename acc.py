@@ -97,7 +97,7 @@ def auto_save(workbook, bank_accounts):
     except IOError as e:
         console.print(f"[bold red]Error auto-saving data: {e}[/bold red]")
 
-def process_transaction(transaction_type, bank_accounts, descriptions, transactions_sheet):
+def process_transaction(transaction_type, bank_accounts, descriptions, transactions_sheet, workbook):
     description = Prompt.ask("Enter a brief description of the transaction")
     bank = Prompt.ask("Which bank will be used?")
     amount_input = Prompt.ask("Enter the transaction amount")
@@ -115,7 +115,7 @@ def process_transaction(transaction_type, bank_accounts, descriptions, transacti
         progress.update(task, advance=100)
     display_balance(bank_accounts, descriptions)
     logging.info(f"{transaction_type} of RM {amount} recorded for {bank}.")
-    auto_save(Workbook, bank_accounts)
+    auto_save(workbook, bank_accounts)
 
 def show_help():
     console.print("[bold blue]Available Commands:[/bold blue]")
@@ -152,9 +152,9 @@ def main():
         try:
             command = Prompt.ask("\nChoose an option: [I] Income, [E] Expense, [S] Save, [T] Transactions, [H] Help, [Q] Quit", default="Q").strip().upper()
             if command == "I":
-                process_transaction("Income", bank_accounts, descriptions, transactions_sheet)
+                process_transaction("Income", bank_accounts, descriptions, transactions_sheet, workbook)
             elif command == "E":
-                process_transaction("Expense", bank_accounts, descriptions, transactions_sheet)
+                process_transaction("Expense", bank_accounts, descriptions, transactions_sheet, workbook)
             elif command == "S":
                 save_data(workbook, bank_accounts, descriptions)
             elif command == "T":
