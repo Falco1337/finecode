@@ -2,15 +2,23 @@ import datetime
 import json
 import os
 import logging
+import time
+import pandas as pd
+import matplotlib.pyplot as plt
+import requests
 from rich.console import Console
 from rich.table import Table
-from rich.prompt import Prompt, Confirm
-from rich.progress import Progress
-from openpyxl import Workbook, load_workbook
+from rich.prompt import Prompt
+from openpyxl import Workbook
 
-BANK_ACCOUNTS_FILE = "bank_accounts.json"
+BANK_ACCOUNTS_FILE = "bank_total.json"
+ASSETS_FILE = "assets.json"
+TRANSACTIONS_FILE = "transactions.json"
 DATE_FORMAT = "%Y-%m-%d"
 LOGGING_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
+
+ALPHA_VANTAGE_API_KEY = "Y3PQLKE4QF2U56GV."
+ALPHA_VANTAGE_URL = 'https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=IBM&interval=5min&apikey=ALPHA_VANTAGE_API_KEY'
 
 logging.basicConfig(level=logging.INFO, format=LOGGING_FORMAT)
 console = Console()
@@ -18,156 +26,161 @@ console = Console()
 def clear_screen():
     os.system("cls" if os.name == "nt" else "clear")
 
-def get_current_month_filename():
-    current_month = datetime.datetime.now().strftime("%B")
-    return f"Finance_statements_{current_month}.xlsx"
-
-def initialize_workbook():
-    filename = get_current_month_filename()
-    if os.path.exists(filename):
-        workbook = load_workbook(filename)
-        transactions_sheet = workbook.active
-    else:
-        workbook = Workbook()
-        transactions_sheet = workbook.active
-        transactions_sheet.title = "Transactions"
-        transactions_sheet.append(["Date", "Transaction Type", "Amount", "Description", "Bank"])
-    return filename, workbook, transactions_sheet
-
-def load_bank_accounts():
-    if os.path.exists(BANK_ACCOUNTS_FILE):
+def load_json_data(file_path, default_data={}):
+    if os.path.exists(file_path):
         try:
-            with open(BANK_ACCOUNTS_FILE, "r") as file:
+            with open(file_path, "r") as file:
                 return json.load(file)
-        except json.JSONDecodeError:
-            console.print("[bold red]Error: Bank accounts file is corrupted.[/bold red]")
-    return {}
+        except (json.JSONDecodeError, IOError):
+            console.print(f"[bold red]Error: {file_path} is corrupted. Initializing new data.[/bold red]")
+    return default_data
 
-def save_bank_accounts(bank_accounts):
+def save_json_data(file_path, data):
     try:
-        with open(BANK_ACCOUNTS_FILE, "w") as file:
-            json.dump(bank_accounts, file)
-        logging.info("Bank accounts saved successfully.")
+        with open(file_path, "w") as file:
+            json.dump(data, file, indent=4)
+        logging.info(f"Data saved successfully to {file_path}.")
     except IOError:
-        console.print("[bold red]Error: Unable to save bank accounts.[/bold red]")
+        console.print(f"[bold red]Error: Unable to save data to {file_path}.[/bold red]")
 
-def record_transaction(transactions_sheet, amount, description, transaction_type, bank):
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    transactions_sheet.append([timestamp, transaction_type, amount, description, bank])
-
-def validate_amount(amount_input):
-    try:
-        amount = float(amount_input)
-        if amount <= 0:
-            raise ValueError("Amount must be a positive number.")
-        return amount
-    except ValueError as e:
-        console.print(f"[bold red]{e}[/bold red]")
-        return None
-
-def display_balance(bank_accounts, descriptions):
-    total_balance = sum(bank_accounts.values())
+def display_balance(bank_accounts, assets):
+    total_bank_balance = sum(bank_accounts.values())
+    total_assets = sum(assets.values())
+    total_balance = total_bank_balance + total_assets
+    
+    clear_screen()
     console.print(f"\n[bold cyan]Total Balance: RM {total_balance:.2f}[/bold cyan]\n")
-    table = Table(title="💰 Aidil Finance Management 2024 💸")
-    table.add_column("Bank", justify="left", style="magenta")
-    table.add_column("Amount", justify="right", style="green")
-    table.add_column("Description", justify="left", style="yellow")
-    max_balance = max((abs(amount) for amount in bank_accounts.values()), default=1)
+    
+    bank_table = Table(title="\U0001F4B3 Bank Accounts")
+    bank_table.add_column("Bank", justify="left", style="cyan")
+    bank_table.add_column("Balance", justify="right", style="green")
+    
     for bank, amount in bank_accounts.items():
-        table.add_row(bank, f"RM {amount:.2f}", descriptions.get(bank, "Balance"))
-    console.print(table)
-    console.print("\n[bold blue]Account Balances Monitoring:[/bold blue]\n")
-    for bank, amount in bank_accounts.items():
-        bar_length = int((abs(amount) / max_balance) * 30)
-        bar_color = "red" if amount < 0 else "green"
-        bar = f"[{bar_color}]{'█' * bar_length}[/{bar_color}]"
-        console.print(f"{bank.ljust(15)} | {bar} RM {amount:.2f}")
+        bank_table.add_row(bank, f"RM {amount:.2f}")
+    
+    asset_table = Table(title="\U0001F4B8 Assets")
+    asset_table.add_column("Asset", justify="left", style="yellow")
+    asset_table.add_column("Value", justify="right", style="green")
+    
+    for asset, value in assets.items():
+        asset_table.add_row(asset, f"RM {value:.2f}")
+    
+    console.print(bank_table)
+    console.print(asset_table)
 
-def show_transaction_history(transactions_sheet):
-    console.print("\n[bold blue]Transaction History:[/bold blue]\n")
-    for row in transactions_sheet.iter_rows(min_row=2, values_only=True):
-        console.print(f"{row[0]} | {row[1]} | RM {row[2]:.2f} | {row[3]} | {row[4]}")
+def generate_reports():
+    transactions = load_json_data(TRANSACTIONS_FILE, [])
+    if not transactions:
+        console.print("[bold yellow]No transactions found.[/bold yellow]")
+        return
+    
+    df = pd.DataFrame(transactions)
+    if "bank" not in df.columns or "amount" not in df.columns:
+        console.print("[bold red]Error: Invalid transaction data format.[/bold red]")
+        return
+    
+    bank_usage = df.groupby("bank")["amount"].sum()
+    
+    console.print("\n[bold cyan]Bank Usage Summary:[/bold cyan]")
+    for bank, amount in bank_usage.items():
+        console.print(f"{bank}: RM {amount:.2f}")
+    
+    # Save to Excel
+    df.to_excel("account_report.xlsx", index=False)
+    console.print("[bold green]Report saved as account_report.xlsx[/bold green]")
+    
+    # Bar Chart for Bank Usage
+    plt.bar(bank_usage.index, bank_usage.values, color='blue')
+    plt.xlabel("Banks")
+    plt.ylabel("Total Usage (RM)")
+    plt.title("Bank Usage Report")
+    plt.xticks(rotation=45)
+    plt.show()
 
-def auto_save(workbook, bank_accounts):
-    filename = get_current_month_filename()
+def fetch_stock_price(symbol):
+    if symbol.upper() == "USD/MYR":
+        url = "https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=USD&to_currency=MYR&apikey=Y3PQLKE4QF2U56GV"
+    elif symbol.upper() == "MYR/USD":
+        url = "https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=MYR&to_currency=USD&apikey=Y3PQLKE4QF2U56GV"
+    else:
+        url = f"https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol={symbol}&interval=5min&apikey=Y3PQLKE4QF2U56GV"
+    
+    response = requests.get(url)
+    
     try:
-        workbook.save(filename)
-        save_bank_accounts(bank_accounts)
-        logging.info(f"Data auto-saved to {filename}")
-    except IOError as e:
-        console.print(f"[bold red]Error auto-saving data: {e}[/bold red]")
+        data = response.json()
+        
+        if symbol.upper() in ["USD/MYR", "MYR/USD"]:
+            if "Realtime Currency Exchange Rate" in data:
+                exchange_rate = data["Realtime Currency Exchange Rate"]["5. Exchange Rate"]
+                console.print(f"[bold green]{symbol} Exchange Rate: {exchange_rate}[/bold green]")
+            else:
+                console.print("[bold red]Error: No exchange rate data available.[/bold red]")
+        
+        elif "Time Series (5min)" in data:
+            latest_time = sorted(data["Time Series (5min)"].keys())[-1]
+            stock_price = data["Time Series (5min)"][latest_time]["1. open"]
+            console.print(f"[bold green]{symbol} Latest Price ({latest_time}): {stock_price}[/bold green]")
+        
+        else:
+            console.print("[bold red]Error: No data available. Check API limits or try again later.[/bold red]")
+    except (KeyError, ValueError, requests.RequestException) as e:
+        console.print(f"[bold red]Error fetching data: {str(e)}[/bold red]")
 
-def process_transaction(transaction_type, bank_accounts, descriptions, transactions_sheet, workbook):
-    description = Prompt.ask("Enter a brief description of the transaction")
-    bank = Prompt.ask("Which bank will be used?")
-    amount_input = Prompt.ask("Enter the transaction amount")
-    amount = validate_amount(amount_input)
-    if amount is None:
-        return
+def fetch_world_trends():
+    console.print("\n[bold cyan]Fetching World Market Prices...[/bold cyan]")
+    fetch_stock_price("USD/MYR")
+    fetch_stock_price("XAU/USD")
+
+def process_transaction(transaction_type, bank_accounts, transactions):
+    bank = Prompt.ask(f"Enter bank for {transaction_type}:")
+    amount = float(Prompt.ask(f"Enter amount for {transaction_type}:"))
+    
     if transaction_type == "Expense" and bank_accounts.get(bank, 0) < amount:
-        console.print(f"[bold red]Insufficient funds in {bank} for this expense.[/bold red]")
+        console.print("[bold red]Error: Insufficient funds![/bold red]")
         return
-    bank_accounts[bank] = bank_accounts.get(bank, 0) + (amount if transaction_type == "Income" else -amount)
-    with Progress(console=console, transient=True) as progress:
-        task = progress.add_task(f"[cyan]Recording {transaction_type.lower()}...[/cyan]", total=100)
-        record_transaction(transactions_sheet, amount, description, transaction_type, bank)
-        descriptions[bank] = description
-        progress.update(task, advance=100)
-    display_balance(bank_accounts, descriptions)
-    logging.info(f"{transaction_type} of RM {amount} recorded for {bank}.")
-    auto_save(workbook, bank_accounts)
+    
+    bank_accounts[bank] = bank_accounts.get(bank, 0) + amount if transaction_type == "Income" else bank_accounts.get(bank, 0) - amount
+    transactions.append({"bank": bank, "amount": amount, "type": transaction_type, "date": datetime.datetime.now().strftime(DATE_FORMAT)})
+    
+    save_json_data(BANK_ACCOUNTS_FILE, bank_accounts)
+    save_json_data(TRANSACTIONS_FILE, transactions)
+    console.print(f"[bold green]{transaction_type} recorded successfully![/bold green]")
 
-def show_help():
-    console.print("[bold blue]Available Commands:[/bold blue]")
-    console.print("[bold green]I:[/bold green] Income transaction\n[bold green]E:[/bold green] Expense transaction\n[bold green]S:[/bold green] Save data\n[bold green]T:[/bold green] Show transaction history\n[bold green]H:[/bold green] Show help\n[bold green]Q:[/bold green] Quit the application")
-
-def save_data(workbook, bank_accounts, descriptions):
-    if Confirm.ask("Are you sure you want to save your data?"):
-        filename = get_current_month_filename()
-        workbook.save(filename)
-        save_bank_accounts(bank_accounts)
-        console.print(f"[bold green]Data saved successfully in {filename}[/bold green]")
+def add_asset(assets):
+    asset_name = Prompt.ask("Enter asset name:")
+    asset_value = float(Prompt.ask("Enter asset value:"))
+    
+    assets[asset_name] = assets.get(asset_name, 0) + asset_value
+    save_json_data(ASSETS_FILE, assets)
+    console.print("[bold green]Asset added successfully![/bold green]")
 
 def main():
     clear_screen()
-    console.print("[bold green]\n🌟 Welcome to Aidil Finance Management System! 🌟\n[/bold green]")
-    bank_accounts = load_bank_accounts()
-    descriptions = {}
-    if not bank_accounts:
-        console.print("[bold yellow]No bank accounts found. Please set up your accounts.[/bold yellow]")
-        while True:
-            try:
-                bank_name = input("Enter the bank name (or 'q' to quit): ")
-                if bank_name.lower() == 'q':
-                    break
-                balance_input = Prompt.ask(f"Enter the balance for {bank_name}")
-                balance = validate_amount(balance_input)
-                if balance is not None:
-                    bank_accounts[bank_name] = balance
-            except KeyboardInterrupt:
-                console.print("\n[bold yellow]Setup cancelled.[/bold yellow]")
-                break
-    filename, workbook, transactions_sheet = initialize_workbook()
+    console.print("[bold green]\n\U0001F31F Accountant Assistant System 2025 \U0001F31F\n[/bold green]")
+    
+    bank_accounts = load_json_data(BANK_ACCOUNTS_FILE, {})
+    assets = load_json_data(ASSETS_FILE, {"ASNB": 981.47, "Gold": 435.60})
+    transactions = load_json_data(TRANSACTIONS_FILE, [])
+    
     while True:
-        try:
-            command = Prompt.ask("\nChoose an option: [I] Income, [E] Expense, [S] Save, [T] Transactions, [H] Help, [Q] Quit", default="Q").strip().upper()
-            if command == "I":
-                process_transaction("Income", bank_accounts, descriptions, transactions_sheet, workbook)
-            elif command == "E":
-                process_transaction("Expense", bank_accounts, descriptions, transactions_sheet, workbook)
-            elif command == "S":
-                save_data(workbook, bank_accounts, descriptions)
-            elif command == "T":
-                show_transaction_history(transactions_sheet)
-            elif command == "H":
-                show_help()
-            elif command == "Q":
-                console.print("[bold yellow]👋 Goodbye![/bold yellow]")
-                break
-            else:
-                console.print("[bold red]Invalid option. Try again.[/bold red]")
-        except KeyboardInterrupt:
-            console.print("\n[bold yellow]Exiting...[/bold yellow]")
+        command = Prompt.ask("\nChoose an option:\n[B] Balance\n[I] Income\n[E] Expense\n[A] Add Asset\n[R] Reports\n[T] World Trends\n[Q] Quit", default="Q").strip().upper()
+        if command == "B":
+            display_balance(bank_accounts, assets)
+        elif command == "I":
+            process_transaction("Income", bank_accounts, transactions)
+        elif command == "E":
+            process_transaction("Expense", bank_accounts, transactions)
+        elif command == "A":
+            add_asset(assets)
+        elif command == "R":
+            generate_reports()
+        elif command == "T":
+            fetch_world_trends()
+        elif command == "Q":
+            print("Good Bye!")
+            clear_screen()
+            time.sleep(1)
             break
 
 if __name__ == "__main__":
