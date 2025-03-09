@@ -1,4 +1,3 @@
-# acca.py
 import atexit
 import datetime
 import json
